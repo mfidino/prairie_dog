@@ -74,3 +74,14 @@ $RECYCLE.BIN/
 
 # Windows shortcuts
 *.lnk
+
+# rdata
+*.Rdata
+
+# csvs and other files
+*.csv
+*.tiff
+*.txt
+*.png
+
+
