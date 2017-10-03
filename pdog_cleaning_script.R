@@ -13,7 +13,7 @@ library(LaplacesDemon)
 library(runjags)
 library(mcmcplots)
 library(coda)
-
+library(igraph)
 
 # get the status data
 fragstatus <- melt(pdat, id = "FRAG.ID", 
@@ -79,10 +79,38 @@ for(i in 2:length(uyear)){
   p_pd_year <- pd[pd$year == uyear[i-1] & pd$pd.status == 1,]
   # previous frag
   p_frag_year <- pd[pd$year == uyear[i-1] & pd$frag.status == 1,]
+  
+  frag_areas <- tcrossprod(p_frag_year$area)
   # current p dogs
   myyear <- pd[pd$year == uyear[i],]
   # store distance info
   nearest_dogs <- nearest_frag <- aw_dogs <- aw_frag <- rep(0, nrow(myyear))
+  
+  # calculate connectivity stuff
+  
+  ppd <- p_frag_year %>% select(one_of(c("easting", "northing"))) %>% 
+    dist(, diag = TRUE, upper = TRUE) %>% as.matrix
+  ppd[ppd>2000] <- 0
+  colnames(ppd) <- p_frag_year$FRAG.ID
+  
+  net2 <- graph_from_adjacency_matrix(ppd, weighted = TRUE)
+
+  sq.m <- 347000000
+  
+ 
+  hm <- distances(net2, V(net2), 
+                  weights = E(net2)$weight, to = V(net2))
+  diag(hm) <- 1
+
+  
+  hm3 <- exp(-0.00006*hm) * frag_areas
+
+  
+  PC <- (sum(hm3)) / (sq.m^2)
+  
+  ack3 <- lose1(net2, PC, p_frag_year$area, 0.00006)
+  
+
   for(j in 1:nrow(myyear)) {
     # attach one sample to the previous year
     to_dist_pd <- rbind(myyear[j,], p_pd_year) %>% 
@@ -92,23 +120,16 @@ for(i in 2:length(uyear)){
       filter(!duplicated(FRAG.ID))
     
     # calculate distances
+    
+
+    
     my_dist_pd <- to_dist_pd %>% select(one_of(c("easting", "northing"))) %>% 
       dist(, diag = TRUE, upper = TRUE) %>% as.matrix
     
-    pc_pd <- my_dist_pd
-    pc_pd[pc_pd > 2000] <- 0
-    
-    test <- pc_pd
-    test[test>0] <- 1
-    
-    net2 <- graph_from_incidence_matrix(test)
-    
-    foo <- cmdscale(my_dist_pd, k = 2)
-    
-    plot(-foo)
-    
     my_dist_frag <- to_dist_frag %>% select(one_of(c("easting", "northing"))) %>% 
       dist(, diag = TRUE, upper = TRUE) %>% as.matrix
+    
+
     
     # sorting, then grab second value (first value is 0)
     nearest_dogs[j] <- sort(as.numeric(my_dist_pd[,1]))[2]

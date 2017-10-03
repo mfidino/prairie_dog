@@ -9,6 +9,26 @@ pull_year <- function(x){
     return(.)
 }
 
+# calculates pc from saura and rubio
+
+lose1 <- function(x, pc = NULL, ars = NULL, alpha = 0.0006){
+  y <- V(x)
+  pk <- rep(0, length(y))
+  
+  for(k in 1:length(y)) {
+    test <- net2 - y[k]
+    hm2 <- distances(test, V(test), 
+                     weights = E(test)$weight, to = V(test))
+    diag(hm2) <- 1
+    pcnum <- exp(-abs(alpha)*hm2) * tcrossprod(ars[-k])
+    pcnum <- sum(pcnum) / (347000000^2)
+    pk[k] <- 100 * ((PC - pcnum)/PC)
+    
+  }
+  return(pk)
+  
+}
+
 calc_waic <- function(x){
   p_prob <- x[,grep("p_prob", colnames(x))]
   lppd <- apply(p_prob, 2, mean) %>% log() %>% sum
