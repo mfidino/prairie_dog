@@ -2,6 +2,21 @@
 # utility functions
 ###################
 
+# loads packages
+
+package_load<-function(packages = NA, quiet=TRUE, verbose=FALSE, 
+  warn.conflicts=FALSE){
+  
+  # download required packages if they're not already
+  pkgsToDownload<- packages[!(packages  %in% installed.packages()[,"Package"])]
+  if(length(pkgsToDownload)>0)
+    install.packages(pkgsToDownload, repos="http://cran.us.r-project.org", quiet=quiet, verbose=verbose)
+  
+  # then load them
+  for(i in 1:length(packages))
+    require(packages[i], character.only=T, quietly=quiet, warn.conflicts=warn.conflicts)
+}
+
 pull_year <- function(x){
   strsplit(as.character(x$variable), "\\.") %>% 
     sapply(., "[[", 2) %>% 
@@ -11,21 +26,104 @@ pull_year <- function(x){
 
 # calculates pc from saura and rubio
 
-lose1 <- function(x, pc = NULL, ars = NULL, alpha = 0.0006){
-  y <- V(x)
+lose1 <- function(network, PC = NULL, areas = NULL, tail_distance = NULL, 
+  sq.m = NULL){
+  y <- V(network)
+  
+  cores <- detectCores()-2
+  cl <- makeCluster(cores)
+  registerDoParallel(cl)
+  alpha <- log(0.05)/tail_distance
   pk <- rep(0, length(y))
   
-  for(k in 1:length(y)) {
-    test <- net2 - y[k]
-    hm2 <- distances(test, V(test), 
-                     weights = E(test)$weight, to = V(test))
-    diag(hm2) <- 1
-    pcnum <- exp(-abs(alpha)*hm2) * tcrossprod(ars[-k])
-    pcnum <- sum(pcnum) / (347000000^2)
+  foreach(k = 1:length(y), .combine = 'c') %do% {
+    tmp <- network - y[k]
+    tmp2 <- distances(tmp, V(tmp), 
+                     weights = E(tmp)$weight, to = V(tmp))
+    diag(tmp2) <- 1
+    pcnum <- exp(-abs(alpha)*tmp2) * tcrossprod(areas[-k])
+    pcnum <- sum(pcnum) / (sq.m^2)
     pk[k] <- 100 * ((PC - pcnum)/PC)
+    pk[k]
     
   }
+  stopCluster(cl)
   return(pk)
+  
+}
+
+calc_pck <- function(fragments = NULL, sq.m = 347000000, 
+  cut_connections_at = 2000, tail_distance = 5000 ){
+  
+  ppd <- fragments %>% select(one_of(c("easting", "northing"))) %>% 
+    dist(, diag = TRUE, upper = TRUE) %>% as.matrix
+  ppd[ppd>cut_connections_at] <- 0 
+  colnames(ppd) <- fragments$FRAG.ID
+  
+  # make the fragment network
+  frag_network <- graph_from_adjacency_matrix(ppd, weighted = TRUE, 
+    mode = "undirected")
+  
+  #V(frag_network)$size = pk*5
+  #node_size = setNames(pk * 5, fragments$FRAG.ID)
+  #plot(frag_network, layout = fragments[,7:8], xlim = range(fragments$easting),
+  #  ylim = range(fragments$northing), rescale = FALSE, vertex.label = NA, 
+  #  edge.arrow.size = 0.0)
+  
+  # calculate topological distances between sites
+  topo_distance <- distances(frag_network, V(frag_network), 
+    weights = E(frag_network)$weight, to = V(frag_network))
+  # sites are connected to themselves
+  diag(topo_distance) <- 1
+  
+  # calculate tail distnace
+  td <- log(0.05)/tail_distance
+  # calculate PCnum as in saura and rubio 2010
+  PCnum <- exp(-abs(td)*topo_distance) * tcrossprod(fragments$area)
+  
+  # calculate PC from PCnum
+  PC <- (sum(PCnum)) / (sq.m^2)
+  
+  # calculate pck
+  pck <- lose1(frag_network, PC = PC, tail_distance = tail_distance,
+    areas = fragments$area, sq.m = sq.m)
+  
+  return(pck)
+}
+
+
+calc_distances <- function(past_fragments = NULL, 
+  past_pdogs = NULL, current_year = NULL){
+  
+  nearest_dogs <- nearest_frag <- aw_dogs <- aw_frag <- rep(0, 
+    nrow(current_year))
+  
+  for(j in 1:nrow(current_year)){
+    # make matrix to pdogs
+    to_dist_pd <- rbind(current_year[j,], past_pdogs) %>% 
+      filter(!duplicated(FRAG.ID))
+    # make matrix to fragments
+    to_dist_frag <- rbind(current_year[j,], past_fragments) %>% 
+      filter(!duplicated(FRAG.ID))
+    # distance matrix pdogs
+    my_dist_pd <- to_dist_pd %>% select(one_of(c("easting", "northing"))) %>% 
+      dist(, diag = TRUE, upper = TRUE) %>% as.matrix
+    # distance matrix fragments
+    my_dist_frag <- to_dist_frag %>% select(one_of(c("easting", "northing"))) %>% 
+      dist(, diag = TRUE, upper = TRUE) %>% as.matrix
+    # nearest pdog colony
+    nearest_dogs[j] <- sort(as.numeric(my_dist_pd[,1]))[2]
+    # area weigthed nearest pdog colony
+    aw_dogs[j] <- (prod(to_dist_pd$area[c(1,order(my_dist_pd[,1])[2])])^0.7)/
+      (nearest_dogs[j]^1.7)
+    # nearest fragment
+    nearest_frag[j] <- sort(as.numeric(my_dist_frag[,1]))[2]
+    # area weighted nearest fragment
+    aw_frag[j] <- (prod(to_dist_frag$area[c(1,order(my_dist_frag[,1])[2])])^0.7)/
+      (nearest_frag[j]^1.7)
+  }
+  
+  return(data.frame(nearest_dogs, aw_dogs, nearest_frag, aw_frag))
   
 }
 

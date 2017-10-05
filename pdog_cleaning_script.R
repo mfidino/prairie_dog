@@ -2,76 +2,31 @@
 # Cleaning script
 #######################
 
+# this starts formatting the data for actual analysis
 
 source("pdog_utility.R")
-pdat <- read.csv("pdog_data.csv", header = TRUE)
 
+package_load(c("reshape2", "dplyr", "LaplacesDemon", "runjags", "mcmcplots",
+  "coda", "igraph", "foreach", "doParallel"))
 
-library(reshape2)
-library(dplyr)
-library(LaplacesDemon)
-library(runjags)
-library(mcmcplots)
-library(coda)
-library(igraph)
-
-# get the status data
-fragstatus <- melt(pdat, id = "FRAG.ID", 
-  measure.vars = grep("^st\\.\\d\\d\\d\\d", colnames(pdat))  ) %>% 
-  filter( nchar(as.character(FRAG.ID)) > 1 )
-
-# convert the variable data
-fragstatus$variable <- pull_year(fragstatus)
-
-# convert column names
-colnames(fragstatus)[2:3] <- c("year", "frag.status")
-
-# do the same with pd
-pdstatus <- melt(pdat, id = "FRAG.ID", 
-  measure.vars = grep("^pd\\.\\d\\d\\d\\d", colnames(pdat))  )%>% 
-  filter( nchar(as.character(FRAG.ID)) > 1 )
-
-# remove variable because it is already in fragstatus
-pdstatus <- pdstatus %>% select(-one_of("variable"))
-
-# change column names 
-colnames(pdstatus)[2] <- "pd.status"
-
-
-# variables we want to keep
-to_keep <- c("FRAG.ID", "frag.age", "easting", "northing", 
-  "frag.area.2002")
-
-red_pdat <- pdat %>% select(one_of(to_keep)) %>% 
-   filter(complete.cases(.))
-
-# make column names shorter
-colnames(red_pdat) <- c("FRAG.ID", "frag.age", "easting", "northing", "area")
-
-# combine all of these data. First, get pdstatus and fragstatus together.
-# pretty simple because they are ordered identically
-
-fragstatus$pd.status <- pdstatus$pd.status
-
-# join them together
-
-pd <- left_join( fragstatus, red_pdat, by = "FRAG.ID")
-
-# make frag.age change with each year
-pd$frag.age <- pd$frag.age + (pd$year - min(pd$year))
-
-# time since study started
-pd$time <- pd$year - (min(pd$year) - 1)
+pd <- read.csv("base_pdog_data.csv", header = TRUE, 
+  stringsAsFactors = FALSE)
 
 # calculate the three types of events that could occur.
 
 uyear <- unique(pd$year)
+usites <- unique(pd$FRAG.ID)
+
+# going to store results for each year into a list, then 
+# combine all of them together
 
 each_year <- vector("list", length = length(uyear)-1)
 
 for(i in 2:length(uyear)){
+  # pastes together the fragments previous status to its current status
   frag.pro <- paste(pd$frag.status[pd$year==uyear[i-1]], 
     pd$frag.status[pd$year==uyear[i]], sep = "-" )
+  # pastes together the pds previous status to its current status
   pd.pro <- paste(pd$pd.status[pd$year==uyear[i-1]], 
     pd$pd.status[pd$year==uyear[i]], sep = "-" )
   
@@ -80,85 +35,25 @@ for(i in 2:length(uyear)){
   # previous frag
   p_frag_year <- pd[pd$year == uyear[i-1] & pd$frag.status == 1,]
   
-  frag_areas <- tcrossprod(p_frag_year$area)
-  # current p dogs
+  # current fragments
   myyear <- pd[pd$year == uyear[i],]
-  # store distance info
-  nearest_dogs <- nearest_frag <- aw_dogs <- aw_frag <- rep(0, nrow(myyear))
   
   # calculate connectivity stuff
-  
-  ppd <- p_frag_year %>% select(one_of(c("easting", "northing"))) %>% 
-    dist(, diag = TRUE, upper = TRUE) %>% as.matrix
-  ppd[ppd>2000] <- 0
-  colnames(ppd) <- p_frag_year$FRAG.ID
-  
-  net2 <- graph_from_adjacency_matrix(ppd, weighted = TRUE)
+pck <- calc_pck(p_frag_year)
+pck <- data.frame(FRAG.ID = p_frag_year$FRAG.ID, pck = pck,
+  stringsAsFactors = FALSE)
+pck <- left_join(data.frame(FRAG.ID = usites,
+  stringsAsFactors = FALSE), pck, by = "FRAG.ID")
+disties <- calc_distances(p_frag_year, p_pd_year, myyear)
 
-  sq.m <- 347000000
-  
- 
-  hm <- distances(net2, V(net2), 
-                  weights = E(net2)$weight, to = V(net2))
-  diag(hm) <- 1
-
-  
-  hm3 <- exp(-0.00006*hm) * frag_areas
-
-  
-  PC <- (sum(hm3)) / (sq.m^2)
-  
-  ack3 <- lose1(net2, PC, p_frag_year$area, 0.00006)
-  
-
-  for(j in 1:nrow(myyear)) {
-    # attach one sample to the previous year
-    to_dist_pd <- rbind(myyear[j,], p_pd_year) %>% 
-      filter(!duplicated(FRAG.ID))
-    
-    to_dist_frag <- rbind(myyear[j,], p_frag_year) %>% 
-      filter(!duplicated(FRAG.ID))
-    
-    # calculate distances
-    
-
-    
-    my_dist_pd <- to_dist_pd %>% select(one_of(c("easting", "northing"))) %>% 
-      dist(, diag = TRUE, upper = TRUE) %>% as.matrix
-    
-    my_dist_frag <- to_dist_frag %>% select(one_of(c("easting", "northing"))) %>% 
-      dist(, diag = TRUE, upper = TRUE) %>% as.matrix
-    
-
-    
-    # sorting, then grab second value (first value is 0)
-    nearest_dogs[j] <- sort(as.numeric(my_dist_pd[,1]))[2]
-    aw_dogs[j] <- (prod(to_dist_pd$area[c(1,order(my_dist_pd[,1])[2])])^0.7)/
-      (nearest_dogs[j]^1.7)
-    nearest_frag[j] <- sort(as.numeric(my_dist_frag[,1]))[2]
-    aw_frag[j] <- (prod(to_dist_frag$area[c(1,order(my_dist_frag[,1])[2])])^0.7)/
-      (nearest_frag[j]^1.7)
-    # if the 2nd value is 0 (should not be), grab 3rd
-    if(nearest_dogs[j] == 0) {
-      nearest_dogs[j] <- sort(my_dist_pd[,1])[3]
-      
-    }
-    
-    if(nearest_frag[j] == 0) {
-      nearest_frag[j] <- sort(as.numeric(my_dist_frag[,1]))[3]
-      
-    }
-    
-  }
-    
-  
   each_year[[i-1]] <- pd[pd$year == uyear[i],]
   each_year[[i-1]]$frag.status <- frag.pro
   each_year[[i-1]]$pd.status <- pd.pro
-  each_year[[i-1]]$nearest_pd <- nearest_dogs
-  each_year[[i-1]]$nearest_frag <- nearest_frag
-  each_year[[i-1]]$aw_pd <- aw_dogs
-  each_year[[i-1]]$aw_frag <- aw_frag
+  each_year[[i-1]]$nearest_pd <- disties$nearest_dogs
+  each_year[[i-1]]$nearest_frag <- disties$nearest_frag
+  each_year[[i-1]]$aw_pd <- disties$aw_dogs
+  each_year[[i-1]]$aw_frag <- disties$aw_frag
+  each_year[[i-1]]$pck <- pck$pck
   
 }
 
@@ -193,7 +88,8 @@ status <- cbind(pd_2002$pd.status + 2, status)
 
 
 pd_temp <- pd_temp %>% select(one_of(c("frag.age", "easting", "northing",
-  "area", "time", "nearest_pd", "nearest_frag","aw_pd", "aw_frag", "status")))
+  "area", "time", "nearest_pd", "nearest_frag","aw_pd", "aw_frag", "pck",
+  "status")))
 
 pd_temp$nearest_frag <- 1 / pd_temp$nearest_frag
 pd_temp$nearest_pd <- 1 / pd_temp$nearest_pd
@@ -202,9 +98,16 @@ had_pd <- apply(status, 1, function(x) min(which(x==3)))
 had_pd[is.infinite(had_pd)] <- 0
 had_pd[had_pd>0] <- 1
 
+# if there is an NA value in pck it means that the site is gone. We
+# will then give it an importance value of zero
+
+pd_temp$pck[is.na(pd_temp$pck)] <- 0
+
 # covariates
 X <- pd_temp %>% select(one_of(c("frag.age", "easting", "northing",
-  "area", "time", "nearest_pd", "nearest_frag", "aw_pd", "aw_frag")))
+  "area", "time", "nearest_pd", "nearest_frag", "aw_pd", "aw_frag", "pck")))
+
+
 
 
 X[,] <- scale(X) 
@@ -214,14 +117,16 @@ X[,] <- scale(X)
 msd <- attributes(X)
 
 X <- as.matrix(X)
-covs <- array(NA, dim = c(384, 6, 10))
-for(i in 1:10){
-  if(i == 10){
+covs <- array(NA, dim = c(384, 6, 11))
+for(i in 1:11){
+  if(i == 11){
     covs[,,i] <- had_pd
   } else{
   covs[,,i] <- X[,i]
 }
 }
+
+
 
 
 Y <- pd_2002 %>% select(one_of(c("frag.age", "easting", "northing", "area")))
@@ -233,6 +138,6 @@ all_data <- list(covs = covs, occ_covs = Y, status = status,
 
 saveRDS(all_data, "cleaned_pdog.RDS")
 
-
+# everything should now be ready for analysis
 
 

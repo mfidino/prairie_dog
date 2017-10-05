@@ -22,9 +22,12 @@ for(i in 1:length(all_dat)){
 
 # covariate order
 corder <- c("frag.age", "easting", "northing",
-  "area", "time", "nearest_pd", "nearest_frag","aw_pd", "aw_frag", "had_pd")
+  "area", "time", "nearest_pd", "nearest_frag","aw_pd", "aw_frag","pck",
+  "had_pd")
 
 # model
+model_covs_ce <- list(list(c(2,3,10), ranef = TRUE))
+
 model_covs_ce <- list(list(c(2,3), ranef = TRUE) ,
   list(8, ranef = TRUE),
   list(9, ranef = TRUE),
@@ -57,7 +60,7 @@ model_covs_ce <- list(list(c(2,3), ranef = TRUE) ,
 
 
 
-model_covs_surv <- list(list(4), list(10), list(1))
+model_covs_surv <- list(list(4))#, list(10), list(1))
 
 models <- c("pdog_model_covariate_model_ranef.R",
             "pdog_model_ranef.R",
