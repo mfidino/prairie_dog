@@ -151,7 +151,7 @@ for(i in 1:length(model_covs_ce)){
    my_waic[i,j] <- as.mcmc.list(mout) %>% as.matrix(.,chains = TRUE) %>% 
      calc_waic(.)
    
-   saveRDS(mout, paste0("model_singular_age",i,"_",j,".RDS"))
+   saveRDS(mout, paste0("model",i,"_",j,".RDS"))
    
    
  }
@@ -215,7 +215,7 @@ for(i in 1:length(model_covs_ce)){
     my_waic[i,j] <- as.mcmc.list(mout) %>% as.matrix(.,chains = TRUE) %>% 
       calc_waic(.)
     
-    saveRDS(mout, paste0("model_mult_age",i,"_",j,".RDS"))
+    saveRDS(mout, paste0("model",i,"_",j,".RDS"))
     
     
   }
@@ -301,7 +301,7 @@ for(i in 1:length(model_covs_ce)){
     my_waic[i,j] <- as.mcmc.list(mout) %>% as.matrix(.,chains = TRUE) %>% 
       calc_waic(.)
     
-    saveRDS(mout, paste0("model_mult_age",i,"_",j,".RDS"))
+    saveRDS(mout, paste0("model",i,"_",j,".RDS"))
     
     
   }
@@ -362,17 +362,16 @@ for(i in 1:length(model_covs_ce)){
     my_waic[i,j] <- as.mcmc.list(mout) %>% as.matrix(.,chains = TRUE) %>% 
       calc_waic(.)
     
-    saveRDS(mout, paste0("model_mult_age",i,"_",j,".RDS"))
+    saveRDS(mout, paste0("model",i,"_",j,".RDS"))
     
     
   }
   
- 
-    
     
   }
 }
   
+write.csv(my_waic, "waic_out_10_2.csv")
 
 mo <- readRDS("model1_1.RDS") %>% as.mcmc.list()
 
@@ -381,6 +380,6 @@ caterplot(mo, "c_beta")
 
 plot(a[-c(1,7)] ~ b)
 
-write.csv(my_waic, "waic_out_model_mult_age.csv")
+
 
 m3 <- read.csv("waic_out_model_mult.csv")
