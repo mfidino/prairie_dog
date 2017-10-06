@@ -23,32 +23,40 @@ for(i in 1:length(all_dat)){
 # covariate order
 corder <- c("frag.age", "easting", "northing",
   "area", "time", "nearest_pd", "nearest_frag","aw_pd", "aw_frag","pck",
+  "pck_pd",
   "had_pd")
 
 # model
-model_covs_ce <- list(list(c(2,3,10), ranef = TRUE))
+
 
 model_covs_ce <- list(list(c(2,3), ranef = TRUE) ,
   list(8, ranef = TRUE),
   list(9, ranef = TRUE),
   list(6, ranef = TRUE),
   list(7, ranef = TRUE),
+  list(10, ranef = TRUE),
+  list(11, ranef = TRUE),
   list(c(2,3), ranef = FALSE),
   list(8, ranef = F),
   list(9, ranef = F),
   list(6, ranef = F),
   list(7, ranef = F),
+  list(10, ranef = F),
+  list(11, ranef = F),
   list(ranef = TRUE),
   list(ranef = F),
   list(c(2,3,6), ranef = TRUE),
   list(c(2,3,8), ranef = TRUE),
   list(c(2,3,9), ranef = TRUE),
-  list(c(2,3,6), ranef = TRUE),
   list(c(2,3,7), ranef = TRUE),
+  list(c(2,3,10), ranef = TRUE),
+  list(c(2,3,11), ranef = TRUE),
   list(c(2,3,8), ranef = F),
   list(c(2,3,9), ranef = F),
   list(c(2,3,6), ranef = F),
   list(c(2,3,7), ranef = F),
+  list(c(2,3,10), ranef = F),
+  list(c(2,3,11), ranef = F),
   list(c(2,3,1), ranef = TRUE),
   list(1, ranef = TRUE),
   list(c(2,3,1), ranef = F),
@@ -60,7 +68,7 @@ model_covs_ce <- list(list(c(2,3), ranef = TRUE) ,
 
 
 
-model_covs_surv <- list(list(4))#, list(10), list(1))
+model_covs_surv <- list(list(4), list(12), list(1), list(10), list(11))
 
 models <- c("pdog_model_covariate_model_ranef.R",
             "pdog_model_ranef.R",
@@ -154,7 +162,7 @@ for(i in 1:length(model_covs_ce)){
    my_waic[i,j] <- as.mcmc.list(mout) %>% as.matrix(.,chains = TRUE) %>% 
      calc_waic(.)
    
-   saveRDS(mout, paste0("model",i,"_",j,".RDS"))
+   saveRDS(mout, paste0("model",i,"_",j,"_",Sys.Date(), ".RDS"))
    
    
  }
@@ -218,7 +226,7 @@ for(i in 1:length(model_covs_ce)){
     my_waic[i,j] <- as.mcmc.list(mout) %>% as.matrix(.,chains = TRUE) %>% 
       calc_waic(.)
     
-    saveRDS(mout, paste0("model",i,"_",j,".RDS"))
+    saveRDS(mout, paste0("model",i,"_",j,"_",Sys.Date(),".RDS"))
     
     
   }
@@ -304,7 +312,7 @@ for(i in 1:length(model_covs_ce)){
     my_waic[i,j] <- as.mcmc.list(mout) %>% as.matrix(.,chains = TRUE) %>% 
       calc_waic(.)
     
-    saveRDS(mout, paste0("model",i,"_",j,".RDS"))
+    saveRDS(mout, paste0("model",i,"_",j,"_",Sys.Date(),".RDS"))
     
     
   }
@@ -365,7 +373,7 @@ for(i in 1:length(model_covs_ce)){
     my_waic[i,j] <- as.mcmc.list(mout) %>% as.matrix(.,chains = TRUE) %>% 
       calc_waic(.)
     
-    saveRDS(mout, paste0("model",i,"_",j,".RDS"))
+    saveRDS(mout, paste0("model",i,"_",j,"_",Sys.Date(),".RDS"))
     
     
   }
@@ -374,15 +382,6 @@ for(i in 1:length(model_covs_ce)){
   }
 }
   
-write.csv(my_waic, "waic_out_10_2.csv")
-
-mo <- readRDS("model1_1.RDS") %>% as.mcmc.list()
-
-caterplot(mo, "c_beta")
+write.csv(my_waic, "waic_out_full_set_10_6.csv")
 
 
-plot(a[-c(1,7)] ~ b)
-
-
-
-m3 <- read.csv("waic_out_model_mult.csv")

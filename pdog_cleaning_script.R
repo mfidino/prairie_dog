@@ -39,7 +39,7 @@ for(i in 2:length(uyear)){
   myyear <- pd[pd$year == uyear[i],]
   
   # calculate connectivity stuff
-pck <- calc_pck(p_frag_year)
+pck <- calc_pck(p_frag_year, pdog = p_pd_year)
 pck <- data.frame(FRAG.ID = p_frag_year$FRAG.ID, pck = pck,
   stringsAsFactors = FALSE)
 pck <- left_join(data.frame(FRAG.ID = usites,
@@ -53,7 +53,8 @@ disties <- calc_distances(p_frag_year, p_pd_year, myyear)
   each_year[[i-1]]$nearest_frag <- disties$nearest_frag
   each_year[[i-1]]$aw_pd <- disties$aw_dogs
   each_year[[i-1]]$aw_frag <- disties$aw_frag
-  each_year[[i-1]]$pck <- pck$pck
+  each_year[[i-1]]$pck <- pck$pck.1
+  each_year[[i-1]]$pck_pd <- pck$pck.2
   
 }
 
@@ -89,7 +90,7 @@ status <- cbind(pd_2002$pd.status + 2, status)
 
 pd_temp <- pd_temp %>% select(one_of(c("frag.age", "easting", "northing",
   "area", "time", "nearest_pd", "nearest_frag","aw_pd", "aw_frag", "pck",
-  "status")))
+  "pck_pd","status")))
 
 pd_temp$nearest_frag <- 1 / pd_temp$nearest_frag
 pd_temp$nearest_pd <- 1 / pd_temp$nearest_pd
@@ -102,10 +103,12 @@ had_pd[had_pd>0] <- 1
 # will then give it an importance value of zero
 
 pd_temp$pck[is.na(pd_temp$pck)] <- 0
+pd_temp$pck_pd[is.na(pd_temp$pck_pd)] <- 0
 
 # covariates
 X <- pd_temp %>% select(one_of(c("frag.age", "easting", "northing",
-  "area", "time", "nearest_pd", "nearest_frag", "aw_pd", "aw_frag", "pck")))
+  "area", "time", "nearest_pd", "nearest_frag", "aw_pd", "aw_frag", "pck",
+  "pck_pd")))
 
 
 
@@ -117,9 +120,9 @@ X[,] <- scale(X)
 msd <- attributes(X)
 
 X <- as.matrix(X)
-covs <- array(NA, dim = c(384, 6, 11))
-for(i in 1:11){
-  if(i == 11){
+covs <- array(NA, dim = c(384, 6, 12))
+for(i in 1:12){
+  if(i == 12){
     covs[,,i] <- had_pd
   } else{
   covs[,,i] <- X[,i]

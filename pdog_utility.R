@@ -26,25 +26,48 @@ pull_year <- function(x){
 
 # calculates pc from saura and rubio
 
-lose1 <- function(network, PC = NULL, areas = NULL, tail_distance = NULL, 
-  sq.m = NULL){
+lose1 <- function(network, PC = NULL, PC_pd = NULL,
+  areas = NULL, tail_distance = NULL, sq.m = NULL, pdog = NULL){
   y <- V(network)
   
   cores <- detectCores()-2
   cl <- makeCluster(cores)
   registerDoParallel(cl)
   alpha <- log(0.05)/tail_distance
-  pk <- rep(0, length(y))
+  pk <- matrix(0, nrow = length(y), ncol = 2)
   
-  foreach(k = 1:length(y), .combine = 'c') %do% {
+  
+  
+  foreach(k = 1:length(y), .combine = rbind) %do% {
     tmp <- network - y[k]
     tmp2 <- distances(tmp, V(tmp), 
                      weights = E(tmp)$weight, to = V(tmp))
     diag(tmp2) <- 1
-    pcnum <- exp(-abs(alpha)*tmp2) * tcrossprod(areas[-k])
+    
+    tmp2[is.infinite(tmp2)] <- 0
+    tmp_iden <- tmp2
+    tmp_iden[tmp_iden>0] <- 1
+    
+    # makes a matrix with a 1 if pdogs were present at that site
+    topo_distance_pd <- expand.grid(pdog$pd.status[-k], 
+      pdog$pd.status[-k]) %>% rowSums(.) %>% 
+      matrix(., ncol = ncol(tmp2), 
+        nrow = nrow(tmp2), byrow=TRUE) 
+    topo_distance_pd[topo_distance_pd>1] <- 1
+    
+    # multiply by actual topo distance
+    topo_distance_pd <- topo_distance_pd * tmp2
+    
+    
+    
+    pcnum <- exp(-abs(alpha)*tmp2) * tmp_iden* tcrossprod(areas[-k])
     pcnum <- sum(pcnum) / (sq.m^2)
-    pk[k] <- 100 * ((PC - pcnum)/PC)
-    pk[k]
+    pcnum_pd <- exp(-abs(alpha)*topo_distance_pd) *
+      tmp_iden * tcrossprod(areas[-k])
+    pcnum_pd <- sum(pcnum_pd) / (sq.m^2)
+    pk[k,1] <- 100 * ((PC - pcnum)/PC)
+    pk[k,2] <- 100 * ((PC_pd - pcnum_pd)/PC_pd)
+    pk[k,]
     
   }
   stopCluster(cl)
@@ -53,7 +76,7 @@ lose1 <- function(network, PC = NULL, areas = NULL, tail_distance = NULL,
 }
 
 calc_pck <- function(fragments = NULL, sq.m = 347000000, 
-  cut_connections_at = 2000, tail_distance = 5000 ){
+  cut_connections_at = 2000, tail_distance = 5000, pdog = NULL ){
   
   ppd <- fragments %>% select(one_of(c("easting", "northing"))) %>% 
     dist(, diag = TRUE, upper = TRUE) %>% as.matrix
@@ -75,18 +98,40 @@ calc_pck <- function(fragments = NULL, sq.m = 347000000,
     weights = E(frag_network)$weight, to = V(frag_network))
   # sites are connected to themselves
   diag(topo_distance) <- 1
+  topo_distance[is.infinite(topo_distance)] <- 0
+  topo_identity <- topo_distance
+  topo_identity[topo_identity>0] <- 1
+  
+  # determine where pdogs were and were not in previous time step
+  pdog_full <- pdog %>% select(one_of(c("FRAG.ID", "pd.status"))) %>% 
+    left_join(data.frame(FRAG.ID = fragments$FRAG.ID,
+      stringsAsFactors = FALSE), ., by = "FRAG.ID")
+  pdog_full$pd.status[is.na(pdog_full$pd.status)] <- 0
+  
+  # makes a matrix with a 1 if pdogs were present at that site
+ topo_distance_pd <- expand.grid(pdog_full$pd.status, 
+   pdog_full$pd.status) %>% rowSums(.) %>% 
+    matrix(., ncol = ncol(topo_distance), 
+      nrow = nrow(topo_distance), byrow=TRUE) 
+ topo_distance_pd[topo_distance_pd>1] <- 1
+ 
+ # multiply by actual topo distance
+ topo_distance_pd <- topo_distance_pd * topo_distance
   
   # calculate tail distnace
   td <- log(0.05)/tail_distance
   # calculate PCnum as in saura and rubio 2010
-  PCnum <- exp(-abs(td)*topo_distance) * tcrossprod(fragments$area)
+  PCnum <- (exp(-abs(td)*topo_distance) * topo_identity) * tcrossprod(fragments$area)
+  PCnum_pd <- exp(-abs(td)*topo_distance_pd) *
+    topo_identity * tcrossprod(fragments$area)
   
   # calculate PC from PCnum
   PC <- (sum(PCnum)) / (sq.m^2)
+  PC_pd <- (sum(PCnum_pd)) / (sq.m^2)
   
   # calculate pck
-  pck <- lose1(frag_network, PC = PC, tail_distance = tail_distance,
-    areas = fragments$area, sq.m = sq.m)
+  pck <- lose1(frag_network, PC = PC, PC_pd = PC_pd, tail_distance = tail_distance,
+    areas = fragments$area, sq.m = sq.m, pdog = pdog_full)
   
   return(pck)
 }
