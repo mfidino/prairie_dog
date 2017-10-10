@@ -4,12 +4,9 @@
 
 source("pdog_utility.R")
 
-library(reshape2)
-library(dplyr)
-library(LaplacesDemon)
-library(runjags)
-library(mcmcplots)
-library(coda)
+package_load(c("reshape2", "dplyr", "LaplacesDemon", "runjags", "mcmcplots",
+               "coda", "igraph", "foreach", "doParallel"))
+
 
 all_dat <- readRDS("cleaned_pdog.RDS")
 
@@ -75,8 +72,12 @@ models <- c("pdog_model_covariate_model_ranef.R",
             "pdog_model_covariate_model.R",
             "pdog_model_intercept.R")
 
+model_covs_ce <- list(list(c(2,3,6), ranef = TRUE))
+model_covs_surv <- list(list(10))
+
 my_waic <- matrix(0, ncol = length(model_covs_surv), 
   nrow = length(model_covs_ce))
+
 
 for(j in 1:length(model_covs_surv)){
 for(i in 1:length(model_covs_ce)){
@@ -133,10 +134,10 @@ for(i in 1:length(model_covs_ce)){
        "o0", "o_beta", "d_sd","e_sd", "c_sd", "p_prob"),
      data = to_model,
      inits = inits,
-     n.chains = 6,
+     n.chains = detectCores()-2,
      adapt = 2000,
      burnin = 5000,
-     sample = ceiling(10000/6),
+     sample = ceiling(10000/(detectCores()-2)),
      thin = 2,
      summarise = FALSE,
      plots = FALSE,
@@ -148,10 +149,10 @@ for(i in 1:length(model_covs_ce)){
          "o0", "o_beta", "d_sd","e_sd", "c_sd", "p_prob"),
        data = to_model,
        inits = inits,
-       n.chains = 6,
+       n.chains = detectCores()-2,
        adapt = 2000,
        burnin = 5000,
-       sample = ceiling(10000/6),
+       sample = ceiling(10000/(detectCores()-2)),
        thin = 2,
        summarise = FALSE,
        plots = FALSE,
@@ -214,10 +215,10 @@ for(i in 1:length(model_covs_ce)){
         "o0", "o_beta", "d_sd","e_sd", "c_sd", "p_prob"),
       data = to_model,
       inits = inits,
-      n.chains = 6,
+      n.chains = detectCores()-2,
       adapt = 2000,
       burnin = 5000,
-      sample = ceiling(10000/6),
+      sample = ceiling(10000/(detectCores()-2)),
       thin = 2,
       summarise = FALSE,
       plots = FALSE,
@@ -283,10 +284,10 @@ for(i in 1:length(model_covs_ce)){
           "o0", "o_beta", "d_sd","e_sd", "c_sd", "p_prob"),
         data = to_model,
         inits = inits,
-        n.chains = 6,
+        n.chains = detectCores()-2,
         adapt = 2000,
         burnin = 5000,
-        sample = ceiling(10000/6),
+        sample = ceiling(10000/(detectCores()-2)),
         thin = 2,
         summarise = FALSE,
         plots = FALSE,
@@ -298,10 +299,10 @@ for(i in 1:length(model_covs_ce)){
           "o0", "o_beta", "d_sd","e_sd", "c_sd", "p_prob"),
         data = to_model,
         inits = inits,
-        n.chains = 6,
+        n.chains = detectCores()-2,
         adapt = 2000,
         burnin = 5000,
-        sample = ceiling(10000/6),
+        sample = ceiling(10000/(detectCores()-2)),
         thin = 2,
         summarise = FALSE,
         plots = FALSE,
@@ -361,10 +362,10 @@ for(i in 1:length(model_covs_ce)){
         "o0", "o_beta", "p_prob"),
       data = to_model,
       inits = inits,
-      n.chains = 6,
+      n.chains = detectCores()-2,
       adapt = 2000,
       burnin = 5000,
-      sample = ceiling(10000/6),
+      sample = ceiling(10000/(detectCores()-2)),
       thin = 2,
       summarise = FALSE,
       plots = FALSE,

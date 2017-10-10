@@ -39,7 +39,7 @@ for(i in 2:length(uyear)){
   myyear <- pd[pd$year == uyear[i],]
   
   # calculate connectivity stuff
-pck <- calc_pck(p_frag_year, pdog = p_pd_year)
+pck <- calc_pck(p_frag_year)
 pck <- data.frame(FRAG.ID = p_frag_year$FRAG.ID, pck = pck,
   stringsAsFactors = FALSE)
 pck <- left_join(data.frame(FRAG.ID = usites,
@@ -95,6 +95,7 @@ pd_temp <- pd_temp %>% select(one_of(c("frag.age", "easting", "northing",
 pd_temp$nearest_frag <- 1 / pd_temp$nearest_frag
 pd_temp$nearest_pd <- 1 / pd_temp$nearest_pd
 
+# will give warnings, can be ignored
 had_pd <- apply(status, 1, function(x) min(which(x==3)))
 had_pd[is.infinite(had_pd)] <- 0
 had_pd[had_pd>0] <- 1

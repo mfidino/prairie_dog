@@ -26,7 +26,7 @@ pull_year <- function(x){
 
 # calculates pc from saura and rubio
 
-lose1 <- function(network, PC = NULL, PC_pd = NULL,
+lose1 <- function(network, PC = NULL,
   areas = NULL, tail_distance = NULL, sq.m = NULL, pdog = NULL){
   y <- V(network)
   
@@ -34,11 +34,11 @@ lose1 <- function(network, PC = NULL, PC_pd = NULL,
   cl <- makeCluster(cores)
   registerDoParallel(cl)
   alpha <- log(0.05)/tail_distance
-  pk <- matrix(0, nrow = length(y), ncol = 2)
+  pk <- rep(0, length(y))
   
   
   
-  foreach(k = 1:length(y), .combine = rbind) %do% {
+  foreach(k = 1:length(y), .combine = 'c') %do% {
     tmp <- network - y[k]
     tmp2 <- distances(tmp, V(tmp), 
                      weights = E(tmp)$weight, to = V(tmp))
@@ -49,25 +49,25 @@ lose1 <- function(network, PC = NULL, PC_pd = NULL,
     tmp_iden[tmp_iden>0] <- 1
     
     # makes a matrix with a 1 if pdogs were present at that site
-    topo_distance_pd <- expand.grid(pdog$pd.status[-k], 
-      pdog$pd.status[-k]) %>% rowSums(.) %>% 
-      matrix(., ncol = ncol(tmp2), 
-        nrow = nrow(tmp2), byrow=TRUE) 
-    topo_distance_pd[topo_distance_pd>1] <- 1
+    #topo_distance_pd <- expand.grid(pdog$pd.status[-k], 
+     # pdog$pd.status[-k]) %>% rowSums(.) %>% 
+      #matrix(., ncol = ncol(tmp2), 
+       # nrow = nrow(tmp2), byrow=TRUE) 
+    #topo_distance_pd[topo_distance_pd>1] <- 1
     
     # multiply by actual topo distance
-    topo_distance_pd <- topo_distance_pd * tmp2
+    #topo_distance_pd <- topo_distance_pd * tmp2
     
     
     
     pcnum <- exp(-abs(alpha)*tmp2) * tmp_iden* tcrossprod(areas[-k])
     pcnum <- sum(pcnum) / (sq.m^2)
-    pcnum_pd <- exp(-abs(alpha)*topo_distance_pd) *
-      tmp_iden * tcrossprod(areas[-k])
-    pcnum_pd <- sum(pcnum_pd) / (sq.m^2)
-    pk[k,1] <- 100 * ((PC - pcnum)/PC)
-    pk[k,2] <- 100 * ((PC_pd - pcnum_pd)/PC_pd)
-    pk[k,]
+    #pcnum_pd <- exp(-abs(alpha)*topo_distance_pd) *
+     # tmp_iden * tcrossprod(areas[-k])
+    #pcnum_pd <- sum(pcnum_pd) / (sq.m^2)
+    pk[k] <- 100 * ((PC - pcnum)/PC)
+    #pk[k,2] <- 100 * ((PC_pd - pcnum_pd)/PC_pd)
+    pk[k]
     
   }
   stopCluster(cl)
@@ -76,7 +76,7 @@ lose1 <- function(network, PC = NULL, PC_pd = NULL,
 }
 
 calc_pck <- function(fragments = NULL, sq.m = 347000000, 
-  cut_connections_at = 2000, tail_distance = 5000, pdog = NULL ){
+  cut_connections_at = 2000, tail_distance = 5000 ){
   
   ppd <- fragments %>% select(one_of(c("easting", "northing"))) %>% 
     dist(, diag = TRUE, upper = TRUE) %>% as.matrix
@@ -103,34 +103,34 @@ calc_pck <- function(fragments = NULL, sq.m = 347000000,
   topo_identity[topo_identity>0] <- 1
   
   # determine where pdogs were and were not in previous time step
-  pdog_full <- pdog %>% select(one_of(c("FRAG.ID", "pd.status"))) %>% 
-    left_join(data.frame(FRAG.ID = fragments$FRAG.ID,
-      stringsAsFactors = FALSE), ., by = "FRAG.ID")
-  pdog_full$pd.status[is.na(pdog_full$pd.status)] <- 0
+  #pdog_full <- pdog %>% select(one_of(c("FRAG.ID", "pd.status"))) %>% 
+  #  left_join(data.frame(FRAG.ID = fragments$FRAG.ID,
+  #    stringsAsFactors = FALSE), ., by = "FRAG.ID")
+  #pdog_full$pd.status[is.na(pdog_full$pd.status)] <- 0
   
   # makes a matrix with a 1 if pdogs were present at that site
- topo_distance_pd <- expand.grid(pdog_full$pd.status, 
-   pdog_full$pd.status) %>% rowSums(.) %>% 
-    matrix(., ncol = ncol(topo_distance), 
-      nrow = nrow(topo_distance), byrow=TRUE) 
- topo_distance_pd[topo_distance_pd>1] <- 1
+ #topo_distance_pd <- expand.grid(pdog_full$pd.status, 
+  # pdog_full$pd.status) %>% rowSums(.) %>% 
+   # matrix(., ncol = ncol(topo_distance), 
+    #  nrow = nrow(topo_distance), byrow=TRUE) 
+ #topo_distance_pd[topo_distance_pd>1] <- 1
  
  # multiply by actual topo distance
- topo_distance_pd <- topo_distance_pd * topo_distance
+# topo_distance_pd <- topo_distance_pd * topo_distance
   
   # calculate tail distnace
   td <- log(0.05)/tail_distance
   # calculate PCnum as in saura and rubio 2010
   PCnum <- (exp(-abs(td)*topo_distance) * topo_identity) * tcrossprod(fragments$area)
-  PCnum_pd <- exp(-abs(td)*topo_distance_pd) *
-    topo_identity * tcrossprod(fragments$area)
+ # PCnum_pd <- exp(-abs(td)*topo_distance_pd) *
+  #  topo_identity * tcrossprod(fragments$area)
   
   # calculate PC from PCnum
   PC <- (sum(PCnum)) / (sq.m^2)
-  PC_pd <- (sum(PCnum_pd)) / (sq.m^2)
+  #PC_pd <- (sum(PCnum_pd)) / (sq.m^2)
   
   # calculate pck
-  pck <- lose1(frag_network, PC = PC, PC_pd = PC_pd, tail_distance = tail_distance,
+  pck <- lose1(frag_network, PC = PC, tail_distance = tail_distance,
     areas = fragments$area, sq.m = sq.m, pdog = pdog_full)
   
   return(pck)
@@ -169,6 +169,104 @@ calc_distances <- function(past_fragments = NULL,
   }
   
   return(data.frame(nearest_dogs, aw_dogs, nearest_frag, aw_frag))
+  
+}
+
+
+make_tpm_once <- function(eb = NULL, cb = NULL, sb=NULL, 
+                          pcov = NULL, yr = NULL, e_sp = NULL, 
+                          d_sp = NULL, c_sp = NULL,
+                          pstate = NULL, coords = NULL, m_means = NULL, m_sd = NULL, my_samp = NULL,
+                          sds = NULL, raw_frag = NULL){
+  
+  tpm <- array(0, dim = c(3, 3, 384))
+  
+  # change covariates a bit based on last state
+  
+  my_dogs <- which(pstate == 3)
+  my_frags <- which(pstate %in% c(2:3))
+  
+  pck <- calc_pck(raw_frag[my_frags,])
+  pck <- data.frame(FRAG.ID = raw_frag$FRAG.ID[my_frags], pck = pck,
+                    stringsAsFactors = FALSE)
+  pck <- left_join(data.frame(FRAG.ID = raw_frag$FRAG.ID,
+                              stringsAsFactors = FALSE), pck, by = "FRAG.ID")
+  pck$pck[is.na(pck$pck)] <- 0
+  nearest_dogs <- rep(0, 384)
+  
+  for(j in 1:384) {
+    # attach one sample to the previous year
+    if(j %in% my_dogs){
+      mds <- my_dogs[-which(my_dogs == j)]
+    } else {
+      mds <- my_dogs
+    }
+    
+    # if(j %in% my_frags){
+    # mfs <- my_frags[-which(my_frags == j)]
+    #} else {
+    #  mfs <- my_frags
+    # }
+    
+    to_dist_pd <- rbind(coords[j,], coords[mds,])
+    
+    #to_dist_frag <- rbind(coords[j,], coords[mfs,])
+    
+    # calculate distances
+    my_dist_pd <- to_dist_pd %>% select(one_of(c("easting", "northing"))) %>% 
+      dist(, diag = TRUE, upper = TRUE) %>% as.matrix
+    
+    # my_dist_frag <- to_dist_frag %>% select(one_of(c("easting", "northing"))) %>% 
+    #  dist(, diag = TRUE, upper = TRUE) %>% as.matrix
+    
+    # sorting, then grab second value (first value is 0)
+    nearest_dogs[j] <- sort(as.numeric(my_dist_pd[,1]))[2]
+    # nearest_frag[j] <- sort(as.numeric(my_dist_frag[,1]))[2]
+    # if the 2nd value is 0 (should not be), grab 3rd
+    
+  }
+  
+  # scale the covariates
+  
+  nearest_dogs <- ((1/nearest_dogs) - m_means[5])/m_sd[5]
+  pck <- (pck$pck - m_means[6])/m_sd[6]
+  
+  pcov[,yr,6] <- nearest_dogs
+  pcov[,yr,7] <- pck
+  samp_sb <- sb[my_samp,]
+  samp_eb <- eb[my_samp,]
+  samp_cb <- cb[my_samp,]
+  
+  samp_sb[1] <- rnorm(1, samp_sb[1], median(sds[,1]))
+  samp_eb[1] <- rnorm(1, samp_eb[1], median(sds[,2]))
+  samp_cb[1] <- rnorm(1, samp_cb[1], median(sds[,3]))
+  
+  # fill dvlp
+  tpm[1, 1, ] <- 1
+  
+  for(i in 1:dim(tpm)[3]){
+    # from frag exists to
+    tpm[1,2,i] <- 1 - plogis((samp_sb %*% pcov[i,yr,d_sp])) # dvlp
+    tpm[2,2,i] <- plogis((samp_sb %*% pcov[i,yr,d_sp])) * 
+      (1 - plogis((samp_cb %*% pcov[i,yr,c_sp]))) # frag
+    tpm[3,2,i] <- plogis((samp_sb %*% pcov[i,yr,d_sp])) * 
+      plogis((samp_cb %*% pcov[i,yr,c_sp]))# pdogs
+    # from pdogs to
+    tpm[1,3,i] <- 1 - plogis((samp_sb %*% pcov[i,yr,d_sp])) # developed
+    tpm[2,3,i] <- plogis((samp_sb %*% pcov[i,yr,d_sp]))*
+      plogis((samp_eb %*% pcov[i,yr,e_sp])) # frag
+    tpm[3,3,i] <- plogis((samp_sb %*% pcov[i,yr,d_sp]))*
+      (1 - plogis((samp_eb %*% pcov[i,yr,e_sp]))) #pdogs
+  }
+  
+  # sample based off of the previous state
+  new_state = rep(0, 384)
+  for(i in 1:384){
+    new_state[i] <- rcat(1, tpm[1:3, pstate[i],i ])
+  }
+  
+  return(new_state)
+  
   
 }
 
