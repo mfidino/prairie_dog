@@ -30,12 +30,8 @@ lose1 <- function(network, PC = NULL,
   areas = NULL, tail_distance = NULL, sq.m = NULL, pdog = NULL){
   y <- V(network)
   
-  cores <- detectCores()-2
-  cl <- makeCluster(cores)
-  registerDoParallel(cl)
   alpha <- log(0.05)/tail_distance
   pk <- rep(0, length(y))
-  
   
   
   foreach(k = 1:length(y), .combine = 'c') %do% {
@@ -70,7 +66,6 @@ lose1 <- function(network, PC = NULL,
     pk[k]
     
   }
-  stopCluster(cl)
   return(pk)
   
 }

@@ -53,8 +53,7 @@ disties <- calc_distances(p_frag_year, p_pd_year, myyear)
   each_year[[i-1]]$nearest_frag <- disties$nearest_frag
   each_year[[i-1]]$aw_pd <- disties$aw_dogs
   each_year[[i-1]]$aw_frag <- disties$aw_frag
-  each_year[[i-1]]$pck <- pck$pck.1
-  each_year[[i-1]]$pck_pd <- pck$pck.2
+  each_year[[i-1]]$pck <- pck$pck
   
 }
 
@@ -104,12 +103,10 @@ had_pd[had_pd>0] <- 1
 # will then give it an importance value of zero
 
 pd_temp$pck[is.na(pd_temp$pck)] <- 0
-pd_temp$pck_pd[is.na(pd_temp$pck_pd)] <- 0
 
 # covariates
 X <- pd_temp %>% select(one_of(c("frag.age", "easting", "northing",
-  "area", "time", "nearest_pd", "nearest_frag", "aw_pd", "aw_frag", "pck",
-  "pck_pd")))
+  "area", "time", "nearest_pd", "nearest_frag", "aw_pd", "aw_frag", "pck")))
 
 
 

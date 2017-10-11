@@ -4,7 +4,7 @@ source('pdog_utility.R')
 package_load(c("reshape2", "dplyr", "LaplacesDemon", "runjags", "mcmcplots",
   "coda", "igraph", "foreach", "doParallel"))
 
-psim <- readRDS("model1_1_2017-10-10.RDS")
+psim <- readRDS("model17_4_2017-10-06.RDS")
 
 psim <- as.mcmc.list(psim) %>% as.matrix(., chains = TRUE)
 
@@ -46,7 +46,7 @@ colnames(extn) <- 1:ncol(coln)
 surv <- cbind(ints[,colnames(ints)=="d0"], betas[,grep("d_", colnames(betas))])
 colnames(surv) <- 1:ncol(surv)
 
-# make covariates
+# make covariates for projections
 cc <- pd_temp %>% select(one_of(c("frag.age", "easting", "northing",
   "area", "nearest_pd", "pck"))) %>% tail(., 384)
 
@@ -61,6 +61,11 @@ X <- pd_temp %>% select(one_of(c("frag.age", "easting", "northing",
 
 m_means <- apply(X, 2, mean)
 m_sd <- apply(X, 2, sd)
+
+# make covariates for historic simulations
+
+hist_covs <- covs[,,c(1,1,2,3,4,6,10)]
+hist_covs[,,1] <- 1
 
 
 cc2 <- sweep(cc2, 2, m_means)
@@ -87,31 +92,107 @@ yr_5_frags <- data.frame(FRAG.ID = unique(pd$FRAG.ID),
 
 coords <- pd_temp %>% select(one_of(c("easting", "northing")))
 
+# state in 2017
 pstate = status[,6]
 
 
+start <-Sys.time()
+one_samp = sample(1:nrow(extn), 100, replace = FALSE)
 
-one_samp = sample(1:nrow(eb), 10, replace = TRUE)
+one_go <- array(0, dim = c(384, 10, length(one_samp)))
 
-one_go <- array(0, dim = c(384, 10, 10))
-for(iter in 1:10){
+do_sim <- function(eb= NULL, cb = NULL, sb = surv, pcov = NULL,
+  e_sp = NULL, d_sp = NULL, c_sp = NULL, coords = NULL, m_means = NULL,
+  sds = NULL, m_sd = NULL, pstate = NULL, my_samp = NULL, raw_frag = NULL){
+  single_samp <- matrix(0, ncol = dim(pcov)[2], nrow = 384)
+  single_samp[,1] <- make_tpm_once(eb = eb, cb = cb, sb = sb, 
+    pcov = pcov, yr = 1,
+    e_sp = e_sp,d_sp = d_sp, c_sp = c_sp, coords = coords, 
+    m_means = m_means, sds = sds, m_sd = m_sd,
+    pstate = pstate, my_samp = my_samp, raw_frag = raw_frag)
+  for(sim in 2:dim(pcov)[2]){
+    single_samp[,sim] <- make_tpm_once(eb = eb, cb = cb, sb = sb, 
+      pcov = pcov, yr = sim,
+      e_sp = e_sp,d_sp = d_sp, c_sp = c_sp, coords = coords, 
+      m_means = m_means, sds = sds, m_sd = m_sd,
+      pstate = single_samp[,sim-1], my_samp = my_samp, raw_frag = raw_frag)
+    
+  }
+  return(single_samp)
+}
+
+
+cores <- detectCores()-2
+cl <- makeCluster(cores)
+registerDoParallel(cl)
+start <- Sys.time()
+proj_2007 <- foreach(i = 1:10002, 
+  .packages = c('magrittr', 'dplyr', 'igraph', 'parallel', 'doParallel',
+    'LaplacesDemon')) %dopar% {
+   do_sim(eb = extn, cb = coln, sb = surv, 
+    pcov = pcov,
+    e_sp = e_sp,d_sp = d_sp, c_sp = c_sp, coords = coords, 
+    m_means = m_means, sds = sds, m_sd = m_sd,
+    pstate = pstate, my_samp = i, raw_frag = yr_5_frags)
+    }
+
+saveRDS(proj_2007, "proj_2007.RDS")
+stopCluster(cl)
+end <- Sys.time()
+cores <- detectCores()-2
+cl <- makeCluster(cores)
+registerDoParallel(cl)
+proj_2002 <- foreach(i = 1:10002, 
+  .packages = c('magrittr', 'dplyr', 'igraph', 'parallel', 'doParallel',
+    'LaplacesDemon')) %dopar% {
+      do_sim(eb = extn, cb = coln, sb = surv, 
+        pcov = hist_covs[,-6,],
+        e_sp = e_sp,d_sp = d_sp, c_sp = c_sp, coords = coords, 
+        m_means = m_means, sds = sds, m_sd = m_sd,
+        pstate = status[,1], my_samp = i, raw_frag = yr_5_frags)
+    }
+saveRDS(proj_2002, "proj_2002.RDS")
+stopCluster(cl)
+
+
+
+
+
+proj_2002 <- foreach(i = 1:10)
+end <- Sys.time()
+
+for(iter in 1:){
   
-  one_go[,1,iter] <- make_tpm_once(eb = eb, cb = cb, sb = sb, pcov = pcov, yr = 1,
+  one_go[,1,iter] <- make_tpm_once(eb = extn, cb = coln, sb = surv, 
+    pcov = pcov, yr = 1,
     e_sp = e_sp,d_sp = d_sp, c_sp = c_sp, coords = coords, 
     m_means = m_means, sds = sds, m_sd = m_sd,
     pstate = pstate, my_samp = one_samp[iter], raw_frag = yr_5_frags)
   for(sim in 2:10){
-    one_go[,sim,iter] <- make_tpm_once(eb = eb, cb = cb, sb = sb, pcov = pcov, yr = sim,
-                                       e_sp = e_sp,d_sp = d_sp, c_sp = c_sp, coords = coords, 
-                                       m_means = m_means, sds = sds, m_sd = m_sd,
-                                       pstate = one_go[,sim-1,iter], my_samp = one_samp[iter], raw_frag = yr_5_frags)
+    one_go[,sim,iter] <- make_tpm_once(eb = extn, cb = coln, sb = surv, 
+      pcov = pcov, yr = sim,
+      e_sp = e_sp,d_sp = d_sp, c_sp = c_sp, coords = coords, 
+      m_means = m_means, sds = sds, m_sd = m_sd,
+      pstate = one_go[,sim-1,iter], my_samp = one_samp[iter], raw_frag = yr_5_frags)
   }
   
 }
 
-my_ans <- array(0, dim = c(3, 10, 10))
+end <- Sys.time()
+
+ack <- array(unlist(proj_2002), dim = c(nrow(proj_2002[[1]]), 
+  ncol(proj_2002[[1]]), length(proj_2002)))
+
+my_ans <- array(0, dim = c(3, 10, length(one_samp)))
 
 ones <- twos <- tre <- matrix(0, ncol = 10, nrow = 10)
+
+on <- tw <- tr <- matrix(0, nrow = 5, ncol = 5) # sim by year matrix
+for(i in 1:5){
+  on[i,] <- colSums(ack[,,i]==1)
+  tw[i,]<-  colSums(ack[,,i]==2)
+  tr[i,]<-  colSums(ack[,,i]==3)
+}
 
 for(i in 1:10){
   ones[i,] <- colSums(one_go[,,i]==1)
