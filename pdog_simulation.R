@@ -128,7 +128,7 @@ registerDoParallel(cl)
 start <- Sys.time()
 proj_2007 <- foreach(i = 1:10002, 
   .packages = c('magrittr', 'dplyr', 'igraph', 'parallel', 'doParallel',
-    'LaplacesDemon')) %dopar% {
+    'LaplacesDemon'), .errorhandling = "remove") %dopar% {
    do_sim(eb = extn, cb = coln, sb = surv, 
     pcov = pcov,
     e_sp = e_sp,d_sp = d_sp, c_sp = c_sp, coords = coords, 
@@ -144,7 +144,7 @@ cl <- makeCluster(cores)
 registerDoParallel(cl)
 proj_2002 <- foreach(i = 1:10002, 
   .packages = c('magrittr', 'dplyr', 'igraph', 'parallel', 'doParallel',
-    'LaplacesDemon')) %dopar% {
+    'LaplacesDemon'), .errorhandling = "remove") %dopar% {
       do_sim(eb = extn, cb = coln, sb = surv, 
         pcov = hist_covs[,-6,],
         e_sp = e_sp,d_sp = d_sp, c_sp = c_sp, coords = coords, 
@@ -155,43 +155,31 @@ saveRDS(proj_2002, "proj_2002.RDS")
 stopCluster(cl)
 
 
+parray <- array(as.numeric(unlist(proj_2007)), 
+  dim = c(384, 10, length(proj_2007)))
+
 
 
 
 proj_2002 <- foreach(i = 1:10)
 end <- Sys.time()
 
-for(iter in 1:){
-  
-  one_go[,1,iter] <- make_tpm_once(eb = extn, cb = coln, sb = surv, 
-    pcov = pcov, yr = 1,
-    e_sp = e_sp,d_sp = d_sp, c_sp = c_sp, coords = coords, 
-    m_means = m_means, sds = sds, m_sd = m_sd,
-    pstate = pstate, my_samp = one_samp[iter], raw_frag = yr_5_frags)
-  for(sim in 2:10){
-    one_go[,sim,iter] <- make_tpm_once(eb = extn, cb = coln, sb = surv, 
-      pcov = pcov, yr = sim,
-      e_sp = e_sp,d_sp = d_sp, c_sp = c_sp, coords = coords, 
-      m_means = m_means, sds = sds, m_sd = m_sd,
-      pstate = one_go[,sim-1,iter], my_samp = one_samp[iter], raw_frag = yr_5_frags)
-  }
-  
-}
+
 
 end <- Sys.time()
 
-ack <- array(unlist(proj_2002), dim = c(nrow(proj_2002[[1]]), 
-  ncol(proj_2002[[1]]), length(proj_2002)))
+parray <- array(unlist(proj_2007), dim = c(nrow(proj_2007[[1]]), 
+  ncol(proj_2007[[1]]), length(proj_2007)))
 
-my_ans <- array(0, dim = c(3, 10, length(one_samp)))
+my_ans <- array(0, dim = c(3, 10, length(proj_2007)))
 
 ones <- twos <- tre <- matrix(0, ncol = 10, nrow = 10)
 
-on <- tw <- tr <- matrix(0, nrow = 5, ncol = 5) # sim by year matrix
-for(i in 1:5){
-  on[i,] <- colSums(ack[,,i]==1)
-  tw[i,]<-  colSums(ack[,,i]==2)
-  tr[i,]<-  colSums(ack[,,i]==3)
+on <- tw <- tr <- matrix(0, nrow = 9998, ncol = 10) # sim by year matrix
+for(i in 1:9998){
+  on[i,] <- colSums(parray[,,i]==1)
+  tw[i,]<-  colSums(parray[,,i]==2)
+  tr[i,]<-  colSums(parray[,,i]==3)
 }
 
 for(i in 1:10){
@@ -200,9 +188,9 @@ for(i in 1:10){
   tre[i,] <- colSums(one_go[,,i]==3)
 }
 
-oo <- apply(ones, 2, quantile, probs = c(0.025,0.5,0.975))
-tt <- apply(twos, 2, quantile, probs = c(0.025,0.5,0.975))
-tr <- apply(tre, 2, quantile, probs = c(0.025,0.5,0.975))
+oo <- apply(on, 2, quantile, probs = c(0.025,0.5,0.975))
+tt <- apply(tw, 2, quantile, probs = c(0.025,0.5,0.975))
+tr <- apply(tr, 2, quantile, probs = c(0.025,0.5,0.975))
 
 windows(10, 5)
 par(mfrow= c(1, 3))
